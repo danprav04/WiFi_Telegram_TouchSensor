@@ -19,6 +19,7 @@ UniversalTelegramBot bot(BOTtoken, client);
 int freq = 2000;
 int channel = 0;
 int resolution = 8;
+int delayBetweanAlerts;
 
 
 void setup() {
@@ -29,6 +30,9 @@ void setup() {
   //Speaker
   ledcSetup(channel, freq, resolution);
   ledcAttachPin(18, channel);
+  delayBetweanAlerts = 90;
+  pinMode(19, OUTPUT);
+  digitalWrite(19, LOW);
   //---
 
  
@@ -50,6 +54,17 @@ void setup() {
 int count1 = 0;
 
 void loop() {
+  if(!isTouch){
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+    while(numNewMessages) {
+      Serial.println("got response");
+      handleNewMessages(numNewMessages);
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    }
+  }
+    
+  
       if((digitalRead(12) == HIGH) && isTouch){
 
         Serial.println("No Touch");
@@ -67,8 +82,8 @@ void loop() {
 
       if((digitalRead(12) == HIGH)){
         count1+=1;
-        Serial.println(count1);
-        if(count1 == 200){
+        Serial.print(count1); Serial.print(" / "); Serial.println(delayBetweanAlerts);
+        if(count1 > delayBetweanAlerts){
           Serial.println("Alert");
           noTouchAlert();
           count1 = 0;
@@ -79,11 +94,43 @@ void loop() {
 }
 
 void noTouchAlert() {
-    bot.sendMessage(CHAT_ID, "No touch for 2sec", "");
+    bot.sendMessage(CHAT_ID, "Alert", "");
+    digitalWrite(19, HIGH);
     for(int i=0;i<15;i++){
       ledcWriteTone(channel, 2000);
       delay(500);
       ledcWriteTone(channel, 0);
       delay(500);
     }
+    digitalWrite(19, LOW);
+}
+
+void handleNewMessages(int numNewMessages) {
+  Serial.println("handleNewMessages");
+  Serial.println(String(numNewMessages));
+
+  for (int i=0; i<numNewMessages; i++) {
+    // Chat id of the requester
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+
+    String from_name = bot.messages[i].from_name;
+    
+    if (text.indexOf("/AlertSet") >= 0) {
+      text.remove(0, 10);
+      delayBetweanAlerts = text.toInt();
+      bot.sendMessage(chat_id, "Done", "");
+    }
+    if (text.indexOf("/Alert") >= 0) {
+      noTouchAlert();
+      bot.sendMessage(chat_id, "Done", "");
+    }
+  }
 }
